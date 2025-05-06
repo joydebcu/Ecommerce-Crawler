@@ -18,35 +18,90 @@ The crawler employs multiple strategies to identify product URLs:
 ### 1. URL Pattern Recognition
 
 The crawler looks for common e-commerce product URL patterns such as:
-- `/product/`
-- `/item/`
-- `/p/`
-- `/pd/`
+
+**Standard product paths:**
+- `/product/`, `/products/`
+- `/item/`, `/items/`
+- `/p/`, `/pd/`
 - `/buy/`
-- `/shop/`
+- `/shop/`, `/shopping/`
 - `/goods/`
-- `/detail/`
+- `/detail/`, `/productdetail/`
 - `/prod/`
+
+**E-commerce specific paths:**
+- `/catalog/`
+- `/collection/`, `/collections/`
+- `/category/`, `/categories/`
+- `/dp/` (common on Amazon-style sites)
+- `/sku/`
+- `/merchandise/`, `/merch/`
+- `/article/`
+- `/view/`, `/productview/`
+
+**India-specific e-commerce paths:**
+- `/fashion/`
+- `/clothing/`, `/apparel/`
+- `/ethnic/`
+- `/accessories/`, `/jewellery/`
+- `/footwear/`
+- `/beauty/`
+- `/home/`, `/furniture/`
+
+**Product identifier patterns:**
+- IDs in URLs: `/id12345`
+- HTML product pages: `/12345.html`
+- Alphanumeric product codes
+- Common product URL formats like `-p-12345.html`
 
 ### 2. Adaptive Pattern Learning
 
 As the crawler explores each website, it analyzes page content for product indicators such as:
-- `data-product-id` attributes
-- "Add to cart" buttons
-- SKU identifiers
-- Product detail sections
 
-When it finds these indicators, it learns the URL pattern of that page and adds it to its domain-specific pattern list, improving detection for subsequent pages.
+**Product ID attributes:**
+- `data-product-id`, `product-id`, `productId`
+- `data-pid`, `data-sku`, `sku-id`
+- `item-id`, `variant-id`
 
-### 3. Breadth-First Search
+**Shopping functionality:**
+- "Add to cart" buttons and variations
+- "Buy now" buttons
+- "Add to wishlist" functionality
+- Price elements and selectors
+
+**Product detail elements:**
+- Product description sections
+- Product title elements
+- Size and color selectors
+- Customer review sections
+
+**India-specific indicators:**
+- MRP (Maximum Retail Price) elements
+- Pincode check features (delivery availability)
+- EMI options
+- Delivery information
+
+When it finds these indicators, it learns both the primary URL pattern (`/category/`) and more specific patterns (`/category/subcategory/`) of that page and adds them to its domain-specific pattern list, improving detection for subsequent pages.
+
+### 3. Breadth-First Search with Enhanced Link Extraction
 
 The crawler uses a breadth-first search approach to systematically explore the website structure:
+
 1. Start at the homepage
-2. Extract all links from the current page
-3. Filter links to keep only those from the same domain
-4. Queue new links for processing
-5. Identify and save product URLs
+2. Extract all links from the current page using multiple strategies:
+   - Standard anchor tags
+   - Product cards and grid items
+   - Data attributes that may contain URLs
+   - Onclick handlers with navigation
+3. Process URL parameters intelligently:
+   - Preserve query parameters for potential product URLs
+   - Handle URL fragments appropriately
+   - Normalize URLs to avoid duplicates
+4. Queue new links for processing based on relevance
+5. Identify product URLs using the multi-layered detection approach
 6. Continue until reaching the maximum page limit or exhausting all pages
+
+The enhanced link extraction process significantly improves the crawler's ability to discover product URLs in modern e-commerce sites that use JavaScript frameworks and dynamic content loading.
 
 ### 4. Parallel Processing
 
