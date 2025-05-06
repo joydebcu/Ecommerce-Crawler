@@ -194,6 +194,9 @@ Additionally, it generates a statistics file with information about the crawl:
 }
 ```
 
+Demo Output on command line for 1000 request per site with 10 max concurrent requests, 10sec timeout and 2sec request delay
+![Demo](demo.png)
+
 ## Performance Considerations
 
 - **Memory Usage**: The crawler maintains sets of visited URLs and discovered product URLs in memory. For extremely large websites, this may require significant memory.
