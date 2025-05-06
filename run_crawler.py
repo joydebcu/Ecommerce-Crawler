@@ -18,10 +18,10 @@ async def main():
     # Create crawler instance
     crawler = EcommerceProductCrawler(
         domains=DOMAINS,
-        max_pages_per_domain=30,  # Adjust as needed
+        max_pages_per_domain=1000,  # Adjust as needed
         max_concurrent_requests=10,  # Adjust based on your internet connection
-        request_delay=3.0,          # Be respectful to the websites
-        timeout=30
+        request_delay=2.0,          # Be respectful to the websites
+        timeout=10
     )
     
     # Run the crawler

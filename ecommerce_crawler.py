@@ -50,13 +50,9 @@ PRODUCT_URL_PATTERNS = [
     r'/[^/]+-\d+$',   # Matches: /product-name-123456
     r'/[^/]+/\d+\.html$',  # Matches: /product-name/123456.html
     r'/[^/]+-\d+\.html$',  # Matches: /product-name-123456.html
-    
-    # Nykaa Fashion specific patterns
     r'/[^/]+/[^/]+/p/\d+$',  # Matches: /category/product-name/p/123456
     r'/[^/]+/[^/]+/[^/]+/p/\d+$',  # Matches: /category/subcategory/product-name/p/123456
     r'/[^/]+-[^/]+-[^/]+/p/\d+$',  # Matches: /brand-product-name/p/123456
-    
-    # Tata Cliq specific patterns
     r'/[^/]+/p-[a-z0-9]+$',  # Matches: /product-name/p-mp000000024375865
     r'/[^/]+/p-[a-z0-9]+/',  # Matches: /product-name/p-mp000000024375865/
     
@@ -105,8 +101,8 @@ PRODUCT_URL_PATTERNS = [
     r'.*-p-\d+\.html',
     r'.*-pd-\d+\.html',
 
-    r'/[^/]+/p/\d+$',  # Matches: /product-name/p/123456 (Nykaa Fashion style)
-    r'/c/\d+$',        # Matches: /category-path/c/6826 (Nykaa Fashion category)
+    r'/[^/]+/p/\d+$',  # Matches: /product-name/p/123456
+    r'/c/\d+$',        # Matches: /category-path/c/6826
 ]
 
 # Common product identifiers in HTML
@@ -269,20 +265,25 @@ class EcommerceProductCrawler:
             },
             'tatacliq.com': {
                 'headers': {
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                    'Cache-Control': 'max-age=0',
+                    'accept': '*/*',
+                    'accept-language': 'en-US,en;q=0.9,hi;q=0.8,de;q=0.7',
+                    'content-type': 'application/json',
+                    'priority': 'u=1, i',
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-origin',
                 },
-                'request_delay': 2.0,
+                'api_endpoints': {
+                    'product': '/recommendationengine/offers?productCode={product_code}&categoryCode={category_code}&brandCode={brand_code}&price={price}&sellerId={seller_id}&channel=mobile&neuPassFlag=true&neuPassSLPFlag=true'
+                },
+                'request_delay': 2.0,            
             }
         }
         
         # Default user agent that mimics a mobile browser
         self.user_agent = user_agent or (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                   (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 "
+            "(KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
         )
         
         # Keep track of visited URLs to avoid revisiting
