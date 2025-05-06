@@ -1,0 +1,16 @@
+{
+  "domains": 4,
+  "total_product_urls": 124,
+  "product_urls_per_domain": {
+    "https://www.virgio.com": 2,
+    "https://www.tatacliq.com": 50,
+    "https://nykaafashion.com": 36,
+    "https://www.westside.com": 36
+  },
+  "pages_crawled_per_domain": {
+    "https://www.virgio.com": 54,
+    "https://www.tatacliq.com": 50,
+    "https://nykaafashion.com": 50,
+    "https://www.westside.com": 50
+  }
+}

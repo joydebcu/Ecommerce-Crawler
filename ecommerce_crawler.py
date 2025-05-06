@@ -204,8 +204,7 @@ class EcommerceProductCrawler:
                 max_concurrent_requests: int = 10,
                 request_delay: float = 0.5,
                 timeout: int = 30,
-                user_agent: str = None,
-                browser_profile: str = "chrome120"):  # Add this parameter
+                user_agent: str = None):
         """
         Initialize the crawler with a list of domains to crawl.
         
@@ -216,7 +215,6 @@ class EcommerceProductCrawler:
             request_delay: Delay between requests to the same domain in seconds
             timeout: Request timeout in seconds
             user_agent: User agent to use for requests
-            browser_profile: Browser profile to impersonate using curl_cffi (e.g., "chrome120")
         """
         # Normalize domains
         self.domains = [self._normalize_domain(domain) for domain in domains]
@@ -224,63 +222,8 @@ class EcommerceProductCrawler:
         self.max_concurrent_requests = max_concurrent_requests
         self.request_delay = request_delay
         self.timeout = timeout
-        self.browser_profile = browser_profile  # Store the browser profile
         
-        # Site-specific configurations
-        self.site_configs = {
-            'nykaafashion.com': {
-                'headers': {
-                    'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'accept-language': 'en-US,en;q=0.9',
-                    'cache-control': 'max-age=0',
-                    'domain': 'NYKAA_FASHION',
-                    'priority': 'u=1, i',
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'same-origin',
-                },
-                'api_endpoints': {
-                    'product': '/rest/appapi/V3/products/id/{product_id}?currency=INR&country_code=IN&size_data=true&platform=MSITE',
-                    'category': '/rest/appapi/V3/categories/{category_id}/products?currency=INR&country_code=IN&page={page}&size=48',
-                    'search': '/rest/appapi/V3/search?currency=INR&country_code=IN&query={query}&page={page}&size=48'
-                },
-                'initial_paths': [
-                    '/women',
-                    '/men',
-                    '/kids',
-                    '/home',
-                    '/beauty',
-                    '/accessories',
-                    '/footwear',
-                    '/jewellery',
-                    '/bags',
-                    '/watches',
-                    '/sunglasses',
-                    '/sports',
-                    '/home-decor',
-                    '/kitchen',
-                    '/furniture',
-                ],
-                'request_delay': 2.0,
-            },
-            'tatacliq.com': {
-                'headers': {
-                    'accept': '*/*',
-                    'accept-language': 'en-US,en;q=0.9,hi;q=0.8,de;q=0.7',
-                    'content-type': 'application/json',
-                    'priority': 'u=1, i',
-                    'sec-fetch-dest': 'empty',
-                    'sec-fetch-mode': 'cors',
-                    'sec-fetch-site': 'same-origin',
-                },
-                'api_endpoints': {
-                    'product': '/recommendationengine/offers?productCode={product_code}&categoryCode={category_code}&brandCode={brand_code}&price={price}&sellerId={seller_id}&channel=mobile&neuPassFlag=true&neuPassSLPFlag=true'
-                },
-                'request_delay': 2.0,            
-            }
-        }
-        
-        # Default user agent that mimics a mobile browser
+        # Default user agent that mimics a modern browser
         self.user_agent = user_agent or (
             "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 "
             "(KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1"
@@ -383,81 +326,31 @@ class EcommerceProductCrawler:
                         return True
             
             # Additional content-based checks
-            if html_content:
+            try:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
                 # Check for product schema markup
                 if 'itemtype="http://schema.org/Product"' in html_content or 'itemtype="https://schema.org/Product"' in html_content:
                     return True
                 
-                # Check for common product page elements using BeautifulSoup for more accurate parsing
-                try:
-                    soup = BeautifulSoup(html_content, 'html.parser')
-                    
-                    # Look for product title elements
-                    product_title_elements = soup.select('.product-title, .product_title, .product-name, .product_name, h1.title')
-                    if product_title_elements:
+                # Check for common product page elements
+                product_title_elements = soup.select('.product-title, .product_title, .product-name, .product_name, h1.title')
+                if product_title_elements:
+                    return True
+                
+                # Look for price elements
+                price_elements = soup.select('.price, .product-price, .product_price, .current-price, .current_price')
+                if price_elements:
+                    # Look for add to cart buttons
+                    cart_buttons = soup.select('button[contains(@class, "cart")], button[contains(@class, "buy")]')
+                    if cart_buttons:
                         return True
                     
-                    # Look for price elements
-                    price_elements = soup.select('.price, .product-price, .product_price, .current-price, .current_price')
-                    if price_elements:
-                        # Price elements alone aren't conclusive, look for more indicators
-                        # Check for add to cart buttons
-                        cart_buttons = soup.select('button[contains(@class, "cart")], button[contains(@class, "buy")]')
-                        if cart_buttons:
-                            return True
-                        
-                except Exception as e:
-                    logger.debug(f"Error in BeautifulSoup parsing: {str(e)}")
+            except Exception as e:
+                logger.debug(f"Error in BeautifulSoup parsing: {str(e)}")
         
         return False
     
-    async def _fetch_api_data(self, session: aiohttp.ClientSession, url: str, domain: str) -> Optional[dict]:
-        """Fetch data from API endpoints using browser impersonation when needed."""
-        parsed_domain = urlparse(domain).netloc
-        site_config = self.site_configs.get(parsed_domain, {})
-        headers = site_config.get('headers', {}).copy()
-        headers['User-Agent'] = self.user_agent
-        
-        # Determine whether to use curl_cffi or aiohttp based on the domain
-        use_impersonation = False
-        if any(site in parsed_domain for site in ["nykaafashion.com"]):
-            use_impersonation = True
-        
-        try:
-            if use_impersonation:
-                # Use curl_cffi with browser impersonation for sites with anti-bot measures
-                loop = asyncio.get_event_loop()
-                
-                # Execute the curl_cffi request in a thread pool
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: curl_requests.get(
-                        url,
-                        impersonate=self.browser_profile,
-                        timeout=self.timeout,
-                        headers=headers  # Pass any additional headers
-                        # curl_cffi handles redirects by default
-                    )
-                )
-                
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    logger.warning(f"API request failed for {url}, status: {response.status_code}")
-                    return None
-            else:
-                # Use standard aiohttp for sites without strict anti-bot measures
-                async with session.get(url, headers=headers, timeout=self.timeout) as response:
-                    if response.status == 200:
-                        return await response.json()
-                    else:
-                        logger.warning(f"API request failed for {url}, status: {response.status}")
-                        return None
-                        
-        except Exception as e:
-            logger.error(f"Error fetching API data from {url}: {str(e)}")
-            return None
-
     def _extract_product_id_from_url(self, url: str) -> Optional[str]:
         """Extract product ID from URL based on domain patterns."""
         parsed_url = urlparse(url)
@@ -486,52 +379,25 @@ class EcommerceProductCrawler:
                 return match.group(1)
         
         return None
-
+    
     async def _process_product_page(self, session: aiohttp.ClientSession, url: str, domain: str) -> bool:
         """Process a product page and extract additional product URLs from API."""
         product_id = self._extract_product_id_from_url(url)
         if not product_id:
             return False
         
-        parsed_domain = urlparse(domain).netloc
-        site_config = self.site_configs.get(parsed_domain, {})
-        api_endpoints = site_config.get('api_endpoints', {})
+        headers = {
+            'User-Agent': self.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Cache-Control': 'max-age=0',
+        }
         
         if 'nykaafashion.com' in domain:
-            # Try multiple API endpoints for Nykaa Fashion
-            api_urls = [
-                # Main product API
-                urljoin(domain, api_endpoints['product'].format(product_id=product_id)),
-                # Similar products API
-                urljoin(domain, f'/rest/appapi/V3/products/similar/{product_id}?currency=INR&country_code=IN'),
-                # Category products API
-                urljoin(domain, f'/rest/appapi/V3/products/category?currency=INR&country_code=IN&product_id={product_id}')
-            ]
-            
-            for api_url in api_urls:
-                data = await self._fetch_api_data(session, api_url, domain)
-                if data:
-                    # Extract products from different API response structures
-                    if 'data' in data:
-                        # Main product API
-                        if 'similar_products' in data['data']:
-                            for product in data['data']['similar_products']:
-                                if 'url' in product:
-                                    self.product_urls[domain].add(product['url'])
-                        # Category products API
-                        elif 'products' in data['data']:
-                            for product in data['data']['products']:
-                                if 'url' in product:
-                                    self.product_urls[domain].add(product['url'])
-                    # Similar products API
-                    elif isinstance(data, list):
-                        for product in data:
-                            if 'url' in product:
-                                self.product_urls[domain].add(product['url'])
             
             # Also try to extract category URLs for broader crawling
             try:
-                async with session.get(url, headers=site_config['headers']) as response:
+                async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         content = await response.text()
                         soup = BeautifulSoup(content, 'html.parser')
@@ -568,11 +434,9 @@ class EcommerceProductCrawler:
         domain = self._extract_domain(url)
         parsed_domain = urlparse(domain).netloc
         
-        # Get site-specific configuration
-        site_config = self.site_configs.get(parsed_domain, {})
         
         # Use site-specific delay if available
-        request_delay = site_config.get('request_delay', self.request_delay)
+        request_delay = 2.0
         
         # Implement rate limiting
         current_time = time.time()
@@ -629,10 +493,13 @@ class EcommerceProductCrawler:
                     return url, None
             else:
                 # Use standard aiohttp for sites without strict anti-bot measures
-                headers = site_config.get('headers', {}).copy()
-                headers['User-Agent'] = self.user_agent
+                headers = {
+                    'User-Agent': self.user_agent,
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cache-Control': 'max-age=0',
+                }
 
-                
                 async with session.get(url, headers=headers, timeout=self.timeout, allow_redirects=True) as response:
                     if response.status == 200:
                         content = await response.text()
@@ -733,47 +600,29 @@ class EcommerceProductCrawler:
         """
         Crawl a single domain using breadth-first search to discover product URLs.
         """
-        parsed_domain = urlparse(domain).netloc
-        site_config = self.site_configs.get(parsed_domain, {})
-        
-        # Initialize queue with domain-specific initial paths
+        # Initialize queue with domain home page and common paths
         queue = [domain]
-        if 'nykaafashion.com' in domain:
-            # Add Nykaa Fashion specific initial paths
-            initial_paths = site_config.get('initial_paths', [])
-            for path in initial_paths:
-                queue.append(urljoin(domain, path))
-            
-            # Also add some common product listing patterns
-            common_patterns = [
-                '/new-arrivals',
-                '/trending',
-                '/best-sellers',
-                '/deals-of-the-day',
-                '/clearance-sale',
-                '/summer-sale',
-                '/winter-sale',
-                '/festival-sale'
-            ]
-            for pattern in common_patterns:
-                queue.append(urljoin(domain, pattern))
-        else:
-            # Default common paths for other domains
-            common_paths = [
-                '/products',
-                '/shop',
-                '/catalog',
-                '/collection',
-                '/category',
-                '/fashion',
-                '/clothing',
-                '/apparel',
-                '/accessories',
-                '/footwear',
-                '/beauty'
-            ]
-            for path in common_paths:
-                queue.append(urljoin(domain, path))
+        common_paths = [
+            '/products',
+            '/shop',
+            '/catalog',
+            '/collection',
+            '/category',
+            '/fashion',
+            '/clothing',
+            '/apparel',
+            '/accessories',
+            '/footwear',
+            '/beauty',
+            '/new-arrivals',
+            '/trending',
+            '/best-sellers',
+            '/deals-of-the-day',
+            '/clearance-sale'
+        ]
+        
+        for path in common_paths:
+            queue.append(urljoin(domain, path))
         
         # Initialize progress bar
         self.progress_bars[domain] = tqdm.tqdm(
@@ -782,11 +631,13 @@ class EcommerceProductCrawler:
             unit="pages"
         )
         
-        # Get site-specific configuration
-        headers = site_config.get('headers', {})
-        headers['User-Agent'] = self.user_agent
+        headers = {
+            'User-Agent': self.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
         
-        # Create HTTP session with site-specific headers
+        # Create HTTP session
         async with aiohttp.ClientSession(headers=headers) as session:
             while queue and len(self.visited_urls[domain]) < self.max_pages_per_domain:
                 # Process pages in batches for concurrency
@@ -816,14 +667,6 @@ class EcommerceProductCrawler:
                     if self._is_product_url(url, content):
                         self.product_urls[domain].add(url)
                         logger.info(f"Found product URL: {url}")
-                        
-                        # For Nykaa Fashion, try to get more products through API
-                        if 'nykaafashion.com' in domain:
-                            await self._process_nykaa_product(session, url, domain)
-                    # Check if it's a category page for Nykaa Fashion
-                    elif 'nykaafashion.com' in domain and '/c/' in url:
-                        logger.info(f"Found category URL: {url}")
-                        await self._process_nykaa_category(session, url, domain)
                     
                     # Extract and queue new links
                     links = self._extract_links(url, content)
@@ -845,80 +688,6 @@ class EcommerceProductCrawler:
         
         # Close progress bar
         self.progress_bars[domain].close()
-
-    async def _process_nykaa_category(self, session: aiohttp.ClientSession, url: str, domain: str):
-        """Process a Nykaa Fashion category page to discover products."""
-        # Extract category ID from URL
-        category_match = re.search(r'/c/(\d+)$', urlparse(url).path)
-        if not category_match:
-            return
-        
-        category_id = category_match.group(1)
-        site_config = self.site_configs.get('nykaafashion.com', {})
-        api_endpoints = site_config.get('api_endpoints', {})
-        
-        # Fetch products from this category
-        for page in range(1, 4):  # Get first 3 pages
-            api_url = urljoin(domain, api_endpoints['category'].format(
-                category_id=category_id,
-                page=page
-            ))
-            
-            logger.info(f"Fetching category products from: {api_url}")
-            data = await self._fetch_api_data(session, api_url, domain)
-            
-            if data and 'data' in data and 'products' in data['data']:
-                for product in data['data']['products']:
-                    if 'url' in product:
-                        product_url = urljoin(domain, product['url'])
-                        self.product_urls[domain].add(product_url)
-                        logger.info(f"Found product URL from category API: {product_url}")
-
-    async def _process_nykaa_product(self, session: aiohttp.ClientSession, url: str, domain: str):
-        """Process a Nykaa Fashion product page to discover more products."""
-        product_id = self._extract_product_id_from_url(url)
-        if not product_id:
-            return
-        
-        site_config = self.site_configs.get('nykaafashion.com', {})
-        api_endpoints = site_config.get('api_endpoints', {})
-        
-        # Try to get category ID from the page
-        try:
-            async with session.get(url, headers=site_config['headers']) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    soup = BeautifulSoup(content, 'html.parser')
-                    
-                    # Look for category information in meta tags or data attributes
-                    category_id = None
-                    meta_category = soup.find('meta', {'name': 'category-id'})
-                    if meta_category:
-                        category_id = meta_category.get('content')
-                    
-                    if category_id:
-                        # Fetch products from the same category
-                        for page in range(1, 4):  # Fetch first 3 pages
-                            api_url = urljoin(domain, api_endpoints['category'].format(
-                                category_id=category_id,
-                                page=page
-                            ))
-                            data = await self._fetch_api_data(session, api_url, domain)
-                            if data and 'data' in data and 'products' in data['data']:
-                                for product in data['data']['products']:
-                                    if 'url' in product:
-                                        self.product_urls[domain].add(product['url'])
-                    
-                    # Also try to get similar products
-                    similar_api_url = urljoin(domain, f'/rest/appapi/V3/products/similar/{product_id}?currency=INR&country_code=IN')
-                    similar_data = await self._fetch_api_data(session, similar_api_url, domain)
-                    if similar_data and isinstance(similar_data, list):
-                        for product in similar_data:
-                            if 'url' in product:
-                                self.product_urls[domain].add(product['url'])
-        
-        except Exception as e:
-            logger.error(f"Error processing Nykaa product {url}: {str(e)}")
 
     async def crawl(self):
         """Crawl all specified domains concurrently."""
@@ -983,8 +752,8 @@ def main():
                         help='Request timeout in seconds (default: 30)')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
-    parser.add_argument('--browser-profile', default='chrome120',
-                        help='Browser profile to impersonate (default: chrome120)')
+    parser.add_argument('--user-agent', 
+                        help='User agent to use for requests')
     
     args = parser.parse_args()
     
@@ -998,8 +767,11 @@ def main():
         max_concurrent_requests=args.concurrency,
         request_delay=args.delay,
         timeout=args.timeout,
-        browser_profile=args.browser_profile  # Pass the browser profile
+        user_agent=args.user_agent
     )
     
     asyncio.run(crawler.crawl())
     crawler.save_results(args.output)
+
+if __name__ == "__main__":
+    main()
