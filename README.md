@@ -1,4 +1,4 @@
-# E-commerce Product URL Crawler
+# E-commerce Product URL Crawler [Flow Diagram](https://www.mermaidchart.com/raw/46ed5f04-fa3c-41e0-82f9-eb4aaeca408f?theme=light&version=v0.1&format=svg)
 
 A Python-based web crawler designed to discover product URLs on e-commerce websites. The crawler implements a breadth-first search approach and uses asynchronous requests to efficiently explore websites, identify product pages, and compile a list of product URLs.
 
